@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.css">
+    <style>
+        #message {
+            height: 300px;
+            overflow: auto;
+        }
+
+        .user {
+            color: blue;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-success">
+                <div class="panel-heading  text-center">
+                    <h3>欢迎进入十里桃林聊天室，请选择您要进入的房间</h3>
+                    <h3>
+                        <button onclick="join(event,'green')" class="btn btn-success">青葱岁月</button>
+                        <button onclick="join(event,'red')" class="btn btn-danger">粉红回忆</button>
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <ul class="list-group" id="message" onclick="selectUser(event)">
+
+                    </ul>
+                </div>
+                <div class="panel-footer">
+                    <textarea name="" id="" class="form-control" onkeydown="send()"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="node_modules/moment/moment.js"></script>
+<script src="node_modules/moment/locale/zh-cn.js"></script>
+<script>
+    /*
+     * 具名聊天
+     * 1.当客户端连接上服务器后，服务器会显示请输入昵称
+     * 2.当客户端第一次向服务器发消息的时候，服务器会把此消息作为用户名保持起来
+     * 3.当客户端再次向服务器发消息的时候，服务器广播的时候会带上用户名
+     * */
+    /*私聊
+     1.给用户名增加点击事件，点击后会在文本域里添加@用户名
+     2.可以在空格后输入想对对方说的话
+     3.回车后发给服务器
+     4.服务器判断是私聊还是公聊，是私聊的话，服务器提取出用户名和内容，发给对应的用户名
+     * */
+    let textArea = document.getElementsByClassName('form-control')[0];
+    let listGroup = document.getElementsByClassName('list-group')[0];
+    let socket = io.connect('http://localhost:8080');
+    socket.on('connect', function () {
+        console.log('连接成功');
+        //socket.send('服务器您好');
+    });
+    function formate(msgObj) {
+        return `<span class="user">${msgObj.username}</span>:${msgObj.content}<span class="pull-right">${moment(msgObj.createAt).fromNow()}</span>`;
+    }
+    //监听消息事件
+    socket.on('message', function (msgObj) {
+        let li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.innerHTML = formate(msgObj);
+        listGroup.appendChild(li);
+    });
+    textArea.onkeydown = function (event) {
+        if (event.keyCode == 13) {
+            socket.send(textArea.value);
+            textArea.value = '';
+            event.preventDefault();
+        }
+    };
+    //向后台发送一个消息，要求后台发送所有的数据
+    socket.emit('getAllMessage');
+    socket.on('allMessage', function (messages) {
+        let str = '';
+        messages.forEach(function (msgObj) {
+            str += `<li>${formate(msgObj)}</li>`;
+        });
+        listGroup.innerHTML = str;
+        autoScroll();
+    });
+    function autoScroll() {
+        let $interval = setInterval(function () {
+            let lastScrollTop = listGroup.scrollTop;
+            listGroup.scrollTop = lastScrollTop + 5;
+            if (listGroup.scrollTop == lastScrollTop) {
+                clearInterval($interval);
+            }
+        }, 13);
+        listGroup.scrollTop = listGroup.scrollHeight;
+    }
+    //点击用户名的时候执行此方法
+    function selectUser(event) {
+        if (/(^| )user($| )/.test(event.target.className)) {
+            textArea.value = `@${event.target.innerHTML} `;
+        }
+    }
+    function join(event, roomName) {
+        socket.emit('join', roomName);
+        let btns = document.querySelectorAll('button');
+        for (let i = 0; i < btns.length; i++) {
+            btns[i].className = btns[i].className.replace('disabled', '');
+        }
+        event.target.className = `${event.target.className} disabled`;
+    }
+</script>
+</body>
+</html>
